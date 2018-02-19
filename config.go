@@ -12,7 +12,7 @@ import (
 )
 
 // host: addr:port
-func NewClientConfigWithKey(username string, sshKey string, host string, checkHostKey bool) (*ssh.ClientConfig, error) {
+func NewClientConfigWithKeyFile(username string, sshKey string, host string, checkHostKey bool) (*ssh.ClientConfig, error) {
     var hostKey ssh.PublicKey
 
     // Read private key
