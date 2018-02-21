@@ -44,6 +44,7 @@ func NewClientConfigWithKeyFile(username string, sshKey string, host string, che
         },
         //HostKeyCallback: ssh.FixedHostKey(hostKey),
         //HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+        //HostKeyCallback: nil,
     }
 
     if checkHostKey {
