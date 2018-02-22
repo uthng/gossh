@@ -6,14 +6,25 @@ import (
     "os"
     "bufio"
     "strings"
+    "strconv"
     "path/filepath"
 
     "golang.org/x/crypto/ssh"
 )
 
-// host: addr:port
-func NewClientConfigWithKeyFile(username string, sshKey string, host string, checkHostKey bool) (*ssh.ClientConfig, error) {
+type Config struct {
+    Host string
+    Port int
+    ClientConfig *ssh.ClientConfig
+}
+
+func NewClientConfigWithKeyFile(username string, sshKey string, host string, port int, checkHostKey bool) (*Config, error) {
     var hostKey ssh.PublicKey
+
+    c := &Config {
+        Host: host,
+        Port: port,
+    }
 
     // Read private key
     key, err := ioutil.ReadFile(sshKey)
@@ -28,14 +39,14 @@ func NewClientConfigWithKeyFile(username string, sshKey string, host string, che
     }
 
     if checkHostKey {
-        arr := strings.Split(host, ":")
-        hostKey, err = getHostKey(arr[0], arr[1])
+        //arr := strings.Split(host, ":")
+        hostKey, err = getHostKey(host, strconv.Itoa(port))
         if err != nil {
             return nil, err
         }
     }
 
-    config := &ssh.ClientConfig {
+    c.ClientConfig = &ssh.ClientConfig {
         User: username,
         Auth: []ssh.AuthMethod {
             //ssh.Password("chrYsal1s-adm1n"),
@@ -48,12 +59,12 @@ func NewClientConfigWithKeyFile(username string, sshKey string, host string, che
     }
 
     if checkHostKey {
-        config.HostKeyCallback = ssh.FixedHostKey(hostKey)
+        c.ClientConfig.HostKeyCallback = ssh.FixedHostKey(hostKey)
     } else {
-        config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+        c.ClientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
     }
 
-    return config, nil
+    return c, nil
 }
 
 
