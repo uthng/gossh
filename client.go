@@ -14,16 +14,16 @@ type Client struct {
 
 // NewDockerClient initializes a docker client to remote cluster
 // following authentication configuration
-func NewClient(config *Config) *Client {
+func NewClient(config *Config) (*Client, error) {
     c := &Client{}
 
     client, err := ssh.Dial("tcp", config.Host + ":" + strconv.Itoa(config.Port), config.ClientConfig)
     if err != nil {
-        return nil
+        return nil, err
     }
 
     c.client = client
-    return c
+    return c, nil
 }
 
 func (c *Client) ExecCommand(cmd string) ([]byte, error) {
