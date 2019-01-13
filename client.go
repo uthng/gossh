@@ -3,6 +3,7 @@ package gossh
 import (
 	"bytes"
 	//"fmt"
+	//"io/ioutil"
 	"strconv"
 
 	"golang.org/x/crypto/ssh"
@@ -46,3 +47,42 @@ func (c *Client) ExecCommand(cmd string) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+// SCPBytes sends content in bytes to remote machine and save it
+// in a file with the given path
+func (c *Client) SCPBytes(content []byte, destFile string) error {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil
+	}
+	defer session.Close()
+
+	scpSession, err := newSCPSession(session)
+	if err != nil {
+		return err
+	}
+
+	return scpSession.SendBytes(content, destFile)
+}
+
+// SCPFile sends content in bytes to remote machine and save it
+// in a file with the given path
+func (c *Client) SCPFile(srcFile, destFile, mode string) error {
+	// Check if dest's folder exists
+
+	// Check if srcFile exists
+
+	// Read srcFile and its content
+
+	// Prepare session
+
+	// Launch command
+
+	// Prepare SCP Protocol
+
+	// Launch scp sendfile command
+
+	return nil
+}
+
+/////////////// INTERNAL FUNCTIONS //////////////////////////
