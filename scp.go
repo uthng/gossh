@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -72,15 +73,45 @@ func newSCPSession(session *ssh.Session) (*scpSession, error) {
 
 // SendBytes creates a file with given name and the byte content
 // as content on remote host
-func (s *scpSession) SendBytes(content []byte, remoteFile string) error {
+func (s *scpSession) SendBytes(content []byte, mode, remoteFile string) error {
 	reader := bytes.NewReader(content)
 
-	return s.SendFile("0777", int64(reader.Len()), remoteFile, ioutil.NopCloser(reader))
+	return s.send(mode, int64(reader.Len()), remoteFile, ioutil.NopCloser(reader))
 }
 
-// SendFile creates a file and writes its content to send in console scpSession//.
+// SendFile checks and reads content of a local file
+// and send it to remote machine
+func (s *scpSession) SendFile(localFile, mode, remoteFile string) error {
+	localFile = filepath.Clean(localFile)
+	remoteFile = filepath.Clean(remoteFile)
+
+	fileInfo, err := os.Stat(localFile)
+	if err != nil {
+		return fmt.Errorf("failed to stat local file: err=%s", err)
+	}
+
+	if fileInfo.IsDir() {
+		return fmt.Errorf("local file must a regular file, not a directory")
+	}
+
+	file, err := os.Open(localFile)
+	if err != nil {
+		return fmt.Errorf("failed to open local file: err=%s", err)
+	}
+
+	// If mode isnot specified, use localFile's mode instead
+	if mode == "" {
+		mode = fmt.Sprintf("%#4o", fileInfo.Mode()&os.ModePerm)
+	}
+
+	return s.send(mode, fileInfo.Size(), remoteFile, file)
+}
+
+///////// INTERNAL FUNCTIONS ////////////////////////////
+
+// send creates a file and writes its content to send in console scpSession
 // remoteFile must be the absolute path.
-func (s *scpSession) SendFile(mode string, length int64, remoteFile string, content io.ReadCloser) error {
+func (s *scpSession) send(mode string, length int64, remoteFile string, content io.ReadCloser) error {
 
 	return s.execSCPSession(SCPFILE, remoteFile, func() error {
 		filename := filepath.Base(remoteFile)
@@ -120,8 +151,8 @@ func (s *scpSession) SendFile(mode string, length int64, remoteFile string, cont
 	})
 }
 
-// StartDirectory starts a recursive directory
-func (s *scpSession) StartDirectory(mode string, remoteDir string) error {
+// startDirectory starts a recursive directory
+func (s *scpSession) startDirectory(mode string, remoteDir string) error {
 	dirname := filepath.Base(remoteDir)
 
 	_, err := fmt.Fprintf(s.in, "%s%s %d %s\n", msgStartDir, mode, 0, dirname)
@@ -133,8 +164,8 @@ func (s *scpSession) StartDirectory(mode string, remoteDir string) error {
 	return nil
 }
 
-// EndDirectory ends a recursive directory
-func (s *scpSession) EndDirectory() error {
+// endDirectory ends a recursive directory
+func (s *scpSession) endDirectory() error {
 	_, err := fmt.Fprintf(s.in, "%s\n", msgEndDir)
 	if err != nil {
 		return fmt.Errorf("error while ending a recursive directory: err=%s", err)
@@ -143,8 +174,6 @@ func (s *scpSession) EndDirectory() error {
 	//return s.readReply()
 	return nil
 }
-
-///////// INTERNAL FUNCTIONS ////////////////////////////
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
 // Returns true if waiting timed out.
