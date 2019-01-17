@@ -12,12 +12,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// Config englobes ssh client configuration with host/port
 type Config struct {
 	Host         string
 	Port         int
 	ClientConfig *ssh.ClientConfig
 }
 
+// NewClientConfigWithKeyFile returns a configuration
+// with given parameters
 func NewClientConfigWithKeyFile(username string, sshKey string, host string, port int, checkHostKey bool) (*Config, error) {
 	var hostKey ssh.PublicKey
 
@@ -56,6 +59,41 @@ func NewClientConfigWithKeyFile(username string, sshKey string, host string, por
 		//HostKeyCallback: ssh.FixedHostKey(hostKey),
 		//HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		//HostKeyCallback: nil,
+	}
+
+	if checkHostKey {
+		c.ClientConfig.HostKeyCallback = ssh.FixedHostKey(hostKey)
+	} else {
+		c.ClientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+	}
+
+	return c, nil
+}
+
+// NewClientConfigWithUserPass returns a configuration
+// with given parameters
+func NewClientConfigWithUserPass(username string, password string, host string, port int, checkHostKey bool) (*Config, error) {
+	var hostKey ssh.PublicKey
+	var err error
+
+	c := &Config{
+		Host: host,
+		Port: port,
+	}
+
+	if checkHostKey {
+		//arr := strings.Split(host, ":")
+		hostKey, err = getHostKey(host, strconv.Itoa(port))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	c.ClientConfig = &ssh.ClientConfig{
+		User: username,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
 	}
 
 	if checkHostKey {
