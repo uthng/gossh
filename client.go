@@ -50,7 +50,7 @@ func (c *Client) ExecCommand(cmd string) ([]byte, error) {
 
 // SCPBytes sends content in bytes to remote machine and save it
 // in a file with the given path
-func (c *Client) SCPBytes(content []byte, destFile string) error {
+func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
@@ -62,27 +62,24 @@ func (c *Client) SCPBytes(content []byte, destFile string) error {
 		return err
 	}
 
-	return scpSession.SendBytes(content, destFile)
+	return scpSession.SendBytes(content, destFile, mode)
 }
 
 // SCPFile sends content in bytes to remote machine and save it
 // in a file with the given path
 func (c *Client) SCPFile(srcFile, destFile, mode string) error {
-	// Check if dest's folder exists
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil
+	}
+	defer session.Close()
 
-	// Check if srcFile exists
+	scpSession, err := newSCPSession(session)
+	if err != nil {
+		return err
+	}
 
-	// Read srcFile and its content
-
-	// Prepare session
-
-	// Launch command
-
-	// Prepare SCP Protocol
-
-	// Launch scp sendfile command
-
-	return nil
+	return scpSession.SendFile(srcFile, destFile, mode)
 }
 
 /////////////// INTERNAL FUNCTIONS //////////////////////////

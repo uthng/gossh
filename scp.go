@@ -73,15 +73,19 @@ func newSCPSession(session *ssh.Session) (*scpSession, error) {
 
 // SendBytes creates a file with given name and the byte content
 // as content on remote host
-func (s *scpSession) SendBytes(content []byte, mode, remoteFile string) error {
+func (s *scpSession) SendBytes(content []byte, remoteFile, mode string) error {
 	reader := bytes.NewReader(content)
+
+	if mode == "" {
+		mode = "0755"
+	}
 
 	return s.send(mode, int64(reader.Len()), remoteFile, ioutil.NopCloser(reader))
 }
 
 // SendFile checks and reads content of a local file
 // and send it to remote machine
-func (s *scpSession) SendFile(localFile, mode, remoteFile string) error {
+func (s *scpSession) SendFile(localFile, remoteFile, mode string) error {
 	localFile = filepath.Clean(localFile)
 	remoteFile = filepath.Clean(remoteFile)
 
