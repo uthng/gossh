@@ -65,8 +65,7 @@ func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
 	return scpSession.SendBytes(content, destFile, mode)
 }
 
-// SCPFile sends content in bytes to remote machine and save it
-// in a file with the given path
+// SCPFile sends a file to remote machine
 func (c *Client) SCPFile(srcFile, destFile, mode string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -80,6 +79,24 @@ func (c *Client) SCPFile(srcFile, destFile, mode string) error {
 	}
 
 	return scpSession.SendFile(srcFile, destFile, mode)
+}
+
+// SCPDir sends recursively a directory to remote machine.
+// Mode is only applied for the 1st directory. All files/folders
+// inside the srcDir will preserve the same mode on remote machine
+func (c *Client) SCPDir(srcDir, destDir, mode string) error {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil
+	}
+	defer session.Close()
+
+	scpSession, err := newSCPSession(session)
+	if err != nil {
+		return err
+	}
+
+	return scpSession.SendDir(srcDir, destDir, mode)
 }
 
 /////////////// INTERNAL FUNCTIONS //////////////////////////
