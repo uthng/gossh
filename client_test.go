@@ -167,6 +167,7 @@ func TestSCPBytes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			client.ExecCommand("rm -rf " + tc.dest)
+
 			err = client.SCPBytes(content, tc.dest, "0777")
 			if err != nil {
 				assert.Equal(t, tc.output, err.Error())
@@ -176,6 +177,8 @@ func TestSCPBytes(t *testing.T) {
 			content, err := ioutil.ReadFile(tc.dest)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.output, string(content))
+
+			client.ExecCommand("rm -rf " + tc.dest)
 		})
 	}
 }
@@ -226,6 +229,7 @@ func TestSCPFile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			client.ExecCommand("rm -rf " + tc.dest)
+
 			err = client.SCPFile("./data/scp_single_file", tc.dest, "0777")
 			if err != nil {
 				assert.Equal(t, tc.output, err.Error())
@@ -235,6 +239,78 @@ func TestSCPFile(t *testing.T) {
 			content, err := ioutil.ReadFile(tc.dest)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.output, string(content))
+
+			client.ExecCommand("rm -rf " + tc.dest)
+		})
+	}
+}
+
+func TestSCDir(t *testing.T) {
+
+	testCases := []struct {
+		name   string
+		dest   string
+		output interface{}
+	}{
+		{
+			"DirOK",
+			"/tmp/scp",
+			[]string{
+				"/tmp/scp",
+				"/tmp/scp/folder1",
+				"/tmp/scp/folder1/test1",
+				"/tmp/scp/folder1/test2",
+				"/tmp/scp/folder2",
+				"/tmp/scp/folder2/test1",
+				"/tmp/scp/folder2/test2",
+				"/tmp/scp/id_rsa",
+				"/tmp/scp/id_rsa.pub",
+				"/tmp/scp/scp_single_file",
+			},
+		},
+	}
+
+	s := &ssh.Server{
+		Addr:    ":2223",
+		Handler: sessionHandler,
+		PasswordHandler: func(ctx ssh.Context, password string) bool {
+			return ctx.User() == "user" && password == "pass"
+		},
+	}
+
+	defer s.Close()
+	go s.ListenAndServe()
+
+	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	client, err := NewClient(config)
+	if !assert.Nil(t, err) {
+		fmt.Println("err", err.Error())
+		return
+	}
+
+	assert.NotNil(t, client)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client.ExecCommand("rm -rf " + tc.dest)
+
+			err = client.SCPDir("./data", tc.dest, "0777")
+			if err != nil {
+				assert.Equal(t, tc.output, err.Error())
+				return
+			}
+
+			res, err := client.ExecCommand("tree -if " + tc.dest)
+			assert.Nil(t, err)
+			arr := strings.Split(string(res), "\n")
+
+			assert.Equal(t, tc.output, arr[:len(arr)-3])
+
+			client.ExecCommand("rm -rf " + tc.dest)
 		})
 	}
 }

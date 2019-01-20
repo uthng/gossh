@@ -80,7 +80,9 @@ func (s *scpSession) SendBytes(content []byte, remoteFile, mode string) error {
 		mode = "0755"
 	}
 
-	return s.send(mode, int64(reader.Len()), remoteFile, ioutil.NopCloser(reader))
+	return s.execSCPSession(SCPFILE, remoteFile, func() error {
+		return s.sendFile(mode, int64(reader.Len()), remoteFile, ioutil.NopCloser(reader))
+	})
 }
 
 // SendFile checks and reads content of a local file
@@ -99,6 +101,7 @@ func (s *scpSession) SendFile(localFile, remoteFile, mode string) error {
 	}
 
 	file, err := os.Open(localFile)
+	defer file.Close()
 	if err != nil {
 		return fmt.Errorf("failed to open local file: err=%s", err)
 	}
@@ -108,51 +111,122 @@ func (s *scpSession) SendFile(localFile, remoteFile, mode string) error {
 		mode = fmt.Sprintf("%#4o", fileInfo.Mode()&os.ModePerm)
 	}
 
-	return s.send(mode, fileInfo.Size(), remoteFile, file)
+	return s.execSCPSession(SCPFILE, remoteFile, func() error {
+		return s.sendFile(mode, fileInfo.Size(), remoteFile, file)
+	})
+}
+
+// SendDir checks and reads recursively content of the given
+// directory, then sends it to remote machine.
+//
+// mode is only applied for the directory. All files/subfolders will
+// preserve the same mode on local
+func (s *scpSession) SendDir(localDir, remoteDir, mode string) error {
+	return s.execSCPSession(SCPDIR, remoteDir, func() error {
+		return s.sendDir(localDir, remoteDir, mode)
+	})
 }
 
 ///////// INTERNAL FUNCTIONS ////////////////////////////
 
-// send creates a file and writes its content to send in console scpSession
+// sendFile creates a file and writes its content to send in console scpSession
 // remoteFile must be the absolute path.
-func (s *scpSession) send(mode string, length int64, remoteFile string, content io.ReadCloser) error {
+func (s *scpSession) sendFile(mode string, length int64, remoteFile string, content io.ReadCloser) error {
 
-	return s.execSCPSession(SCPFILE, remoteFile, func() error {
-		filename := filepath.Base(remoteFile)
+	filename := filepath.Base(remoteFile)
 
-		_, err := fmt.Fprintf(s.in, "%s%s %d %s\n", msgCopyFile, mode, length, filename)
-		if err != nil {
-			return fmt.Errorf("failed to create a new file: err=%s", err)
-		}
+	_, err := fmt.Fprintf(s.in, "%s%s %d %s\n", msgCopyFile, mode, length, filename)
+	if err != nil {
+		return fmt.Errorf("failed to create a new file: err=%s", err)
+	}
 
-		err = s.readReply()
-		if err != nil {
-			return err
-		}
-
-		_, err = io.Copy(s.in, content)
-		defer content.Close()
-		if err != nil {
-			return fmt.Errorf("error while writing content file: err=%s", err)
-		}
-
-		err = s.readReply()
-		if err != nil {
-			return err
-		}
-
-		_, err = s.in.Write([]byte{msgOK})
-		if err != nil {
-			return fmt.Errorf("error while ending transfer: err=%s", err)
-		}
-
-		err = s.readReply()
-		if err != nil {
-			return err
-		}
-
+	err = s.readReply()
+	if err != nil {
 		return err
-	})
+	}
+
+	_, err = io.Copy(s.in, content)
+	//defer content.Close()
+	if err != nil {
+		return fmt.Errorf("error while writing content file: err=%s", err)
+	}
+
+	//err = s.readReply()
+	//if err != nil {
+	//return err
+	//}
+
+	_, err = s.in.Write([]byte{msgOK})
+	if err != nil {
+		return fmt.Errorf("error while ending transfer: err=%s", err)
+	}
+
+	err = s.readReply()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// sendDir checks and reads recursively content of the given
+// directory, then sends it to remote machine.
+//
+// mode is only applied for the directory. All files/subfolders will
+// preserve the same mode on local
+func (s *scpSession) sendDir(localDir, remoteDir, mode string) error {
+	localDir = filepath.Clean(localDir)
+	remoteDir = filepath.Clean(remoteDir)
+	dirName := filepath.Base(localDir)
+
+	// Read & check if localDir is a directory
+	files, err := ioutil.ReadDir(localDir)
+	if err != nil {
+		return err
+	}
+
+	// new remote dir
+	newRemoteDir := remoteDir + "/" + dirName
+	// Create a new directory inside remoteDir
+	err = s.startDirectory(mode, newRemoteDir)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			mode := fmt.Sprintf("%#4o", file.Mode()&os.ModePerm)
+			err := s.sendDir(localDir+"/"+file.Name(), newRemoteDir, mode)
+			if err != nil {
+				return err
+			}
+		}
+
+		if file.Mode().IsRegular() {
+			localFile := localDir + "/" + file.Name()
+			remoteFile := newRemoteDir + "/" + file.Name()
+			fileLocal, err := os.Open(localFile)
+			defer fileLocal.Close()
+			if err != nil {
+				return fmt.Errorf("failed to open local file: err=%s", err)
+			} // If mode isnot specified, use localFile's mode instead
+
+			mode := fmt.Sprintf("%#4o", file.Mode()&os.ModePerm)
+
+			err = s.sendFile(mode, file.Size(), remoteFile, fileLocal)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// end directory creation
+	err = s.endDirectory()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // startDirectory starts a recursive directory
@@ -164,8 +238,7 @@ func (s *scpSession) startDirectory(mode string, remoteDir string) error {
 		return fmt.Errorf("error while starting a recursive directory: err=%s", err)
 	}
 
-	//return s.readReply()
-	return nil
+	return s.readReply()
 }
 
 // endDirectory ends a recursive directory
@@ -175,8 +248,7 @@ func (s *scpSession) endDirectory() error {
 		return fmt.Errorf("error while ending a recursive directory: err=%s", err)
 	}
 
-	//return s.readReply()
-	return nil
+	return s.readReply()
 }
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
