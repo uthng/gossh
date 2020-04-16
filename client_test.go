@@ -2,16 +2,18 @@ package gossh
 
 import (
 	"fmt"
-	"io/ioutil"
-	//"os"
 	"io"
+	"io/ioutil"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 
+	gossh "golang.org/x/crypto/ssh"
+
 	"github.com/gliderlabs/ssh"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func sessionHandler(s ssh.Session) {
@@ -69,24 +71,20 @@ func TestClientUserPass(t *testing.T) {
 	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
 	client, err := NewClient(config)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
-	assert.NotNil(t, client)
+	require.NotNil(t, client)
 
 	cmd := "echo HelloWorld"
 	res, err := client.ExecCommand(cmd)
-	assert.Nil(t, err)
-	assert.Equal(t, string(res), cmd)
+	require.Nil(t, err)
+	require.Equal(t, string(res), cmd)
 }
 
-func TestExecCommand(t *testing.T) {
+func TestExecCommandWithKeyFile(t *testing.T) {
 	s := &ssh.Server{
 		Addr: ":2222",
 		Handler: func(s ssh.Session) {
@@ -103,21 +101,55 @@ func TestExecCommand(t *testing.T) {
 	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithKeyFile("user", "./data/id_rsa", "localhost", 2222, false)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
 	client, err := NewClient(config)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
-	assert.NotNil(t, client)
+	require.NotNil(t, client)
 
 	cmd := "echo HelloWorld"
 	res, err := client.ExecCommand(cmd)
-	assert.Nil(t, err)
-	assert.Equal(t, string(res), cmd)
+	require.Nil(t, err)
+	require.Equal(t, string(res), cmd)
+}
+
+func TestExecCommandWithSignedPubKey(t *testing.T) {
+	s := &ssh.Server{
+		Addr: ":2222",
+		Handler: func(s ssh.Session) {
+			fmt.Fprintf(s, "%s", strings.Join(s.Command(), " "))
+		},
+		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
+			data, _ := ioutil.ReadFile("./data/ca.pub")
+			allowed, _, _, _, _ := ssh.ParseAuthorizedKey(data)
+
+			// Public key signed by a certificate authority is not
+			// a simple key but a certificate with a little more fields.
+			// Among them, the SignatureKey field is the ca.pub.
+			cert := key.(*gossh.Certificate)
+
+			return ctx.User() == "user" && ssh.KeysEqual(cert.SignatureKey, allowed)
+		},
+	}
+
+	defer s.Close()
+	go s.ListenAndServe()
+
+	//config, err := NewClientConfigWithSignedPubKeyFile("root", "/Users/thanhnguyen/.ssh/id_rsa", "/Users/thanhnguyen/.ssh/id_rsa-cert.pub", "10.10.61.4", 22, false)
+	config, err := NewClientConfigWithSignedPubKeyFile("user", "./data/id_rsa", "./data/id_rsa-cert.pub", "localhost", 2222, false)
+	require.Nil(t, err)
+
+	client, err := NewClient(config)
+	require.Nil(t, err)
+
+	require.NotNil(t, client)
+
+	cmd := "echo HelloWorld"
+	res, err := client.ExecCommand(cmd)
+	require.Nil(t, err)
+
+	require.Equal(t, string(res), cmd)
 }
 
 func TestSCPBytes(t *testing.T) {
@@ -152,33 +184,26 @@ func TestSCPBytes(t *testing.T) {
 	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
 	client, err := NewClient(config)
-	if !assert.Nil(t, err) {
-		fmt.Println("err", err.Error())
-		return
-	}
+	require.Nil(t, err)
 
-	assert.NotNil(t, client)
+	require.NotNil(t, client)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			client.ExecCommand("rm -rf " + tc.dest)
+			client.ExecCommand("rm -rf " + path.Dir(tc.dest))
 
 			err = client.SCPBytes(content, tc.dest, "0777")
 			if err != nil {
-				assert.Equal(t, tc.output, err.Error())
+				require.Equal(t, tc.output, err.Error())
 				return
 			}
 
 			content, err := ioutil.ReadFile(tc.dest)
-			assert.Nil(t, err)
-			assert.Equal(t, tc.output, string(content))
-
-			client.ExecCommand("rm -rf " + tc.dest)
+			require.Nil(t, err)
+			require.Equal(t, tc.output, string(content))
 		})
 	}
 }
@@ -214,38 +239,31 @@ func TestSCPFile(t *testing.T) {
 	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
 	client, err := NewClient(config)
-	if !assert.Nil(t, err) {
-		fmt.Println("err", err.Error())
-		return
-	}
+	require.Nil(t, err)
 
-	assert.NotNil(t, client)
+	require.NotNil(t, client)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			client.ExecCommand("rm -rf " + tc.dest)
+			client.ExecCommand("rm -rf " + path.Dir(tc.dest))
 
 			err = client.SCPFile("./data/scp_single_file", tc.dest, "0777")
 			if err != nil {
-				assert.Equal(t, tc.output, err.Error())
+				require.Equal(t, tc.output, err.Error())
 				return
 			}
 
 			content, err := ioutil.ReadFile(tc.dest)
-			assert.Nil(t, err)
-			assert.Equal(t, tc.output, string(content))
-
-			client.ExecCommand("rm -rf " + tc.dest)
+			require.Nil(t, err)
+			require.Equal(t, tc.output, string(content))
 		})
 	}
 }
 
-func TestSCDir(t *testing.T) {
+func TestSCPDir(t *testing.T) {
 
 	testCases := []struct {
 		name   string
@@ -257,6 +275,8 @@ func TestSCDir(t *testing.T) {
 			"/tmp/scp",
 			[]string{
 				"/tmp/scp",
+				"/tmp/scp/ca",
+				"/tmp/scp/ca.pub",
 				"/tmp/scp/folder1",
 				"/tmp/scp/folder1/test1",
 				"/tmp/scp/folder1/test2",
@@ -264,6 +284,7 @@ func TestSCDir(t *testing.T) {
 				"/tmp/scp/folder2/test1",
 				"/tmp/scp/folder2/test2",
 				"/tmp/scp/id_rsa",
+				"/tmp/scp/id_rsa-cert.pub",
 				"/tmp/scp/id_rsa.pub",
 				"/tmp/scp/scp_single_file",
 			},
@@ -282,17 +303,12 @@ func TestSCDir(t *testing.T) {
 	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
-	if !assert.Nil(t, err) {
-		return
-	}
+	require.Nil(t, err)
 
 	client, err := NewClient(config)
-	if !assert.Nil(t, err) {
-		fmt.Println("err", err.Error())
-		return
-	}
+	require.Nil(t, err)
 
-	assert.NotNil(t, client)
+	require.NotNil(t, client)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -300,15 +316,15 @@ func TestSCDir(t *testing.T) {
 
 			err = client.SCPDir("./data", tc.dest, "0777")
 			if err != nil {
-				assert.Equal(t, tc.output, err.Error())
+				require.Equal(t, tc.output, err.Error())
 				return
 			}
 
 			res, err := client.ExecCommand("tree -if " + tc.dest)
-			assert.Nil(t, err)
+			require.Nil(t, err)
 			arr := strings.Split(string(res), "\n")
 
-			assert.Equal(t, tc.output, arr[:len(arr)-3])
+			require.Equal(t, tc.output, arr[:len(arr)-3])
 
 			client.ExecCommand("rm -rf " + tc.dest)
 		})
