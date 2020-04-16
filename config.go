@@ -195,17 +195,21 @@ func getHostKey(host, port string) (ssh.PublicKey, error) {
 
 	scanner := bufio.NewScanner(file)
 	var hostKey ssh.PublicKey
+
 	for scanner.Scan() {
 		fields := strings.Split(scanner.Text(), " ")
 		if len(fields) != 3 {
 			continue
 		}
+
 		if strings.Contains(fields[0], hostport) {
 			var err error
+
 			hostKey, _, _, _, err = ssh.ParseAuthorizedKey(scanner.Bytes())
 			if err != nil {
 				return nil, err
 			}
+
 			break // scanning line by line, first occurrence will be returned
 		}
 	}

@@ -20,7 +20,7 @@ const (
 	msgCopyFile = "C"
 	msgStartDir = "D"
 	msgEndDir   = "E"
-	msgTime     = "T"
+	//msgTime     = "T"
 
 	// reply or send to end tranfer
 	msgOK       = '\x00'
@@ -44,7 +44,6 @@ type scpSession struct {
 }
 
 func newSCPSession(session *ssh.Session) (*scpSession, error) {
-
 	in, err := session.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -102,6 +101,7 @@ func (s *scpSession) SendFile(localFile, remoteFile, mode string) error {
 
 	file, err := os.Open(localFile)
 	defer file.Close()
+
 	if err != nil {
 		return fmt.Errorf("failed to open local file: err=%s", err)
 	}
@@ -132,7 +132,6 @@ func (s *scpSession) SendDir(localDir, remoteDir, mode string) error {
 // sendFile creates a file and writes its content to send in console scpSession
 // remoteFile must be the absolute path.
 func (s *scpSession) sendFile(mode string, length int64, remoteFile string, content io.ReadCloser) error {
-
 	filename := filepath.Base(remoteFile)
 
 	_, err := fmt.Fprintf(s.in, "%s%s %d %s\n", msgCopyFile, mode, length, filename)
@@ -196,6 +195,7 @@ func (s *scpSession) sendDir(localDir, remoteDir, mode string) error {
 	for _, file := range files {
 		if file.IsDir() {
 			mode := fmt.Sprintf("%#4o", file.Mode()&os.ModePerm)
+
 			err := s.sendDir(localDir+"/"+file.Name(), newRemoteDir, mode)
 			if err != nil {
 				return err
@@ -205,8 +205,10 @@ func (s *scpSession) sendDir(localDir, remoteDir, mode string) error {
 		if file.Mode().IsRegular() {
 			localFile := localDir + "/" + file.Name()
 			remoteFile := newRemoteDir + "/" + file.Name()
+
 			fileLocal, err := os.Open(localFile)
 			defer fileLocal.Close()
+
 			if err != nil {
 				return fmt.Errorf("failed to open local file: err=%s", err)
 			} // If mode isnot specified, use localFile's mode instead
@@ -318,7 +320,6 @@ func (s *scpSession) execSCPSession(kind int, dest string, fn func() error) erro
 			errCh <- err
 			return
 		}
-
 	}()
 
 	// Wait for timeout or all wait groupsare done

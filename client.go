@@ -25,6 +25,7 @@ func NewClient(config *Config) (*Client, error) {
 	}
 
 	c.client = client
+
 	return c, nil
 }
 

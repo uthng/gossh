@@ -66,9 +66,9 @@ func TestClientUserPass(t *testing.T) {
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
@@ -96,9 +96,9 @@ func TestExecCommandWithKeyFile(t *testing.T) {
 			return ctx.User() == "user" && ssh.KeysEqual(key, allowed)
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithKeyFile("user", "./data/id_rsa", "localhost", 2222, false)
 	require.Nil(t, err)
@@ -132,9 +132,9 @@ func TestExecCommandWithSignedPubKey(t *testing.T) {
 			return ctx.User() == "user" && ssh.KeysEqual(cert.SignatureKey, allowed)
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	//config, err := NewClientConfigWithSignedPubKeyFile("root", "/Users/thanhnguyen/.ssh/id_rsa", "/Users/thanhnguyen/.ssh/id_rsa-cert.pub", "10.10.61.4", 22, false)
 	config, err := NewClientConfigWithSignedPubKeyFile("user", "./data/id_rsa", "./data/id_rsa-cert.pub", "localhost", 2222, false)
@@ -179,9 +179,9 @@ func TestSCPBytes(t *testing.T) {
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
@@ -209,7 +209,6 @@ func TestSCPBytes(t *testing.T) {
 }
 
 func TestSCPFile(t *testing.T) {
-
 	testCases := []struct {
 		name   string
 		dest   string
@@ -234,9 +233,9 @@ func TestSCPFile(t *testing.T) {
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
 	require.Nil(t, err)
@@ -264,7 +263,6 @@ func TestSCPFile(t *testing.T) {
 }
 
 func TestSCPDir(t *testing.T) {
-
 	testCases := []struct {
 		name   string
 		dest   string
@@ -298,9 +296,9 @@ func TestSCPDir(t *testing.T) {
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
+	go s.ListenAndServe()
 
 	defer s.Close()
-	go s.ListenAndServe()
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
 	require.Nil(t, err)
