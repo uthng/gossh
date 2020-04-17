@@ -1,9 +1,9 @@
-name: build-push
+name: test-build-release
 on: [push, pull_request]
 
 jobs:
   build:
-    name: Test & Build
+    name: Test, Build & Release
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.13
