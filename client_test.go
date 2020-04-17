@@ -6,8 +6,10 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	gossh "golang.org/x/crypto/ssh"
 
@@ -63,12 +65,15 @@ func TestClientUserPass(t *testing.T) {
 			fmt.Fprintf(s, "%s", strings.Join(s.Command(), " "))
 		},
 		PasswordHandler: func(ctx ssh.Context, password string) bool {
+			fmt.Println("user", ctx.User(), "pass", password)
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
 	go s.ListenAndServe()
 
 	defer s.Close()
+
+	time.Sleep(3 * time.Second)
 
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
@@ -99,6 +104,8 @@ func TestExecCommandWithKeyFile(t *testing.T) {
 	go s.ListenAndServe()
 
 	defer s.Close()
+
+	time.Sleep(3 * time.Second)
 
 	config, err := NewClientConfigWithKeyFile("user", "./data/id_rsa", "localhost", 2222, false)
 	require.Nil(t, err)
@@ -136,7 +143,8 @@ func TestExecCommandWithSignedPubKey(t *testing.T) {
 
 	defer s.Close()
 
-	//config, err := NewClientConfigWithSignedPubKeyFile("root", "/Users/thanhnguyen/.ssh/id_rsa", "/Users/thanhnguyen/.ssh/id_rsa-cert.pub", "10.10.61.4", 22, false)
+	time.Sleep(3 * time.Second)
+
 	config, err := NewClientConfigWithSignedPubKeyFile("user", "./data/id_rsa", "./data/id_rsa-cert.pub", "localhost", 2222, false)
 	require.Nil(t, err)
 
@@ -183,6 +191,8 @@ func TestSCPBytes(t *testing.T) {
 
 	defer s.Close()
 
+	time.Sleep(3 * time.Second)
+
 	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
 
@@ -227,7 +237,7 @@ func TestSCPFile(t *testing.T) {
 	}
 
 	s := &ssh.Server{
-		Addr:    ":2223",
+		Addr:    ":2222",
 		Handler: sessionHandler,
 		PasswordHandler: func(ctx ssh.Context, password string) bool {
 			return ctx.User() == "user" && password == "pass"
@@ -237,7 +247,9 @@ func TestSCPFile(t *testing.T) {
 
 	defer s.Close()
 
-	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
+	time.Sleep(3 * time.Second)
+
+	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
 
 	client, err := NewClient(config)
@@ -290,7 +302,7 @@ func TestSCPDir(t *testing.T) {
 	}
 
 	s := &ssh.Server{
-		Addr:    ":2223",
+		Addr:    ":2222",
 		Handler: sessionHandler,
 		PasswordHandler: func(ctx ssh.Context, password string) bool {
 			return ctx.User() == "user" && password == "pass"
@@ -300,7 +312,9 @@ func TestSCPDir(t *testing.T) {
 
 	defer s.Close()
 
-	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2223, false)
+	time.Sleep(3 * time.Second)
+
+	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
 	require.Nil(t, err)
 
 	client, err := NewClient(config)
@@ -318,11 +332,14 @@ func TestSCPDir(t *testing.T) {
 				return
 			}
 
-			res, err := client.ExecCommand("tree -if " + tc.dest)
+			res, err := client.ExecCommand("find " + tc.dest)
 			require.Nil(t, err)
 			arr := strings.Split(string(res), "\n")
 
-			require.Equal(t, tc.output, arr[:len(arr)-3])
+			arr = arr[:len(arr)-1]
+
+			sort.Strings(arr)
+			require.Equal(t, tc.output, arr)
 
 			client.ExecCommand("rm -rf " + tc.dest)
 		})
