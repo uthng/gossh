@@ -13,7 +13,7 @@ Currently, it supports:
 
 #### Connect with a user & password
 
-```
+```golang
   config, err := NewClientConfigWithUserPass("user", "pass", "myremotemachine.com", 22, false)
   if err != nil {
     return err
@@ -27,7 +27,7 @@ Currently, it supports:
 
 #### Connect with a SSH key pair
 
-```
+```golang
   config, err := NewClientConfigWithUserPass("user", "/home/user/.ssh/id_rsa", "myremotemachine.com", 22, false)
   if err != nil {
     return err
@@ -41,7 +41,7 @@ Currently, it supports:
 
 #### Connect with signed SSH certificate
 
-```
+```golang
   config, err := NewClientConfigWithUserPass("user", "/home/user/.ssh/id_rsa", "/home/user/.ssh/id_rsa-cert.pub", "myremotemachine.com", 22, false)
   if err != nil {
     return err
@@ -55,27 +55,27 @@ Currently, it supports:
 
 #### Execute a command
 
-```
-  res, err := client.ExecCommand(cmd)
+```golang
+  res, err := client.ExecCommand("ls -la")
 ```
 
 #### Transfer to remote machine
 
 ##### Content
 
-```
+```golang
   err = client.SCPBytes([]byte(`SCP single file transfer test`), "/tmp/scp_single_file", "0777")
 ```
 
 ##### File
 
-```
+```golang
   err = client.SCPFile("./data/scp_single_file", "/tmp/scp_single_file", "0777")
 ```
 
 ##### Folder and its subfolders
 
-```
+```golang
   err = client.SCPDir("./data", "/tmp/scp", "0777")
 ```
 
