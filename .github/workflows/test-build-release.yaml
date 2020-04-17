@@ -22,11 +22,11 @@ jobs:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-${{ hashFiles('**/go.sum') }}
 
-      - name: Get dependencies
-        run: make deps
+      #- name: Get dependencies
+        #run: make deps
 
-      - name: Check linters
-        run: make linters
+      #- name: Check linters
+        #run: make linters
 
       - name: Launch unit tests
         run: make test-unit
