@@ -7,10 +7,13 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/spf13/cast"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -33,6 +36,8 @@ const (
 	SCPFILE = iota
 	// SCPDIR directory type, so recursive
 	SCPDIR
+	// SCPGETFILE download a remote file
+	SCPGETFILE
 )
 
 type scpSession struct {
@@ -124,6 +129,40 @@ func (s *scpSession) SendFile(localFile, remoteFile, mode string) error {
 func (s *scpSession) SendDir(localDir, remoteDir, mode string) error {
 	return s.execSCPSession(SCPDIR, remoteDir, func() error {
 		return s.sendDir(localDir, remoteDir, mode)
+	})
+}
+
+// GetFile gets remote file and save it to the local file.
+// remoteFile must be the path to a regular file to download.
+// localFile must be the path to the local folder in which remoteFile's will be saved.
+// If localFile does not exist, it will be created.
+func (s *scpSession) GetFile(remoteFile, localFile string) error {
+	localFile = filepath.Clean(localFile)
+	remoteFile = filepath.Clean(remoteFile)
+
+	localFolder := path.Dir(localFile)
+	remoteFilename := path.Base(remoteFile)
+
+	// Check whether the localFile exists.
+	// If not, we create systematically all parent directories.
+	// If yes, we check if localFile is a directory or not.
+	// If it is a directory then, the localFile will be a
+	// concatenation of directory + remoteFile's filename.
+	// If not, localFile remains as it is.
+	fileInfo, err := os.Stat(localFile)
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(localFolder, 0755)
+		if err != nil {
+			return nil
+		}
+	} else {
+		if fileInfo.IsDir() {
+			localFile = localFolder + "/" + remoteFilename
+		}
+	}
+
+	return s.execSCPSession(SCPGETFILE, remoteFile, func() error {
+		return s.getFile(localFile)
 	})
 }
 
@@ -253,6 +292,33 @@ func (s *scpSession) endDirectory() error {
 	return s.readReply()
 }
 
+// getFile gets a remote file and writes its content to the given local file
+func (s *scpSession) getFile(localFile string) error {
+	//var err error
+	var msg string
+	var fields []string
+
+	reader := bufio.NewReader(s.out)
+
+	buffer, n, err := s.readMessage(reader)
+	if err != nil {
+		return err
+	}
+
+	msgType := string(buffer[0])
+
+	if msgType == msgCopyFile {
+		msg = string(buffer[1 : n-1])
+		fields = strings.Split(msg, " ")
+
+		return s.readFileData(reader, localFile, os.FileMode(cast.ToUint32(fields[0])))
+	} else if buffer[0] == msgErr || buffer[0] == msgFatalErr {
+		return fmt.Errorf("%s", string(buffer[1:n]))
+	}
+
+	return fmt.Errorf("expected message type '%s', received '%s'", msgCopyFile, msgType)
+}
+
 // waitTimeout waits for the waitgroup for the specified max timeout.
 // Returns true if waiting timed out.
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
@@ -279,9 +345,11 @@ func (s *scpSession) execSCPSession(kind int, dest string, fn func() error) erro
 
 	// Check type to use correct scp's options
 	if kind == SCPFILE {
-		opt = "-qt"
+		opt = "-t"
 	} else if kind == SCPDIR {
 		opt = "-rt"
+	} else if kind == SCPGETFILE {
+		opt = "-f"
 	} else {
 		return fmt.Errorf("scp type unknown. Only file or dir is supported")
 	}
@@ -388,4 +456,58 @@ func (s *scpSession) readReply() error {
 	}
 
 	return nil
+}
+
+func (s *scpSession) readMessage(reader *bufio.Reader) ([]byte, int, error) {
+	buffer := make([]byte, 1024)
+
+	// Send msgOK in order to receive data sent from remote machine
+	_, err := s.in.Write([]byte{msgOK})
+	if err != nil {
+		return buffer, len(buffer), err
+	}
+
+	n, err := reader.Read(buffer)
+
+	//fmt.Println("n", n)
+	//fmt.Printf("buffer %q\n", string(buffer[:n]))
+
+	return buffer, n, err
+}
+
+func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.FileMode) error {
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for {
+		nbRead := 0
+		nbWrite := 0
+		reachEnd := false
+
+		buf, nbRead, err := s.readMessage(reader)
+		if err == io.EOF {
+			return f.Sync()
+		}
+
+		if buf[nbRead-1] == msgOK {
+			reachEnd = true
+			nbRead = nbRead - 1
+		}
+
+		nbWrite, err = f.Write(buf[:nbRead])
+		if err != nil {
+			return err
+		}
+
+		if nbWrite != nbRead {
+			return fmt.Errorf("Bytes (%d) written to the file is not the same as bytes read (%d)", nbWrite, nbRead)
+		}
+
+		if reachEnd {
+			return f.Sync()
+		}
+	}
 }
