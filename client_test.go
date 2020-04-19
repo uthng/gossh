@@ -65,7 +65,6 @@ func TestClientUserPass(t *testing.T) {
 			fmt.Fprintf(s, "%s", strings.Join(s.Command(), " "))
 		},
 		PasswordHandler: func(ctx ssh.Context, password string) bool {
-			fmt.Println("user", ctx.User(), "pass", password)
 			return ctx.User() == "user" && password == "pass"
 		},
 	}
@@ -342,6 +341,79 @@ func TestSCPDir(t *testing.T) {
 			require.Equal(t, tc.output, arr)
 
 			client.ExecCommand("rm -rf " + tc.dest)
+		})
+	}
+}
+
+func TestSCPGetFile(t *testing.T) {
+	testCases := []struct {
+		name   string
+		src    string
+		dest   string
+		output interface{}
+	}{
+		{
+			"ErrFileNotfound",
+			"/tmp/lorem.txt",
+			"./data/remote",
+			"scp: /tmp/lorem.txt: No such file or directory\n",
+		},
+		{
+			"ErrFileOKInFoler",
+			"/tmp/data/lorem.txt",
+			"./data/remote/lorem.txt",
+			nil,
+		},
+	}
+
+	s := &ssh.Server{
+		Addr:    ":2222",
+		Handler: sessionHandler,
+		PasswordHandler: func(ctx ssh.Context, password string) bool {
+			return ctx.User() == "user" && password == "pass"
+		},
+	}
+	go s.ListenAndServe()
+
+	defer s.Close()
+
+	time.Sleep(3 * time.Second)
+
+	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
+	require.Nil(t, err)
+
+	client, err := NewClient(config)
+	require.Nil(t, err)
+
+	require.NotNil(t, client)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Clean up data before executing tests
+			cmd := exec.Command("bash", "-c", "rm -rf /tmp/data; rm -rf ./data/remote; cp -r ./data /tmp/")
+			_, err := cmd.CombinedOutput()
+			require.Nil(t, err)
+
+			err = client.SCPGetFile(tc.src, tc.dest)
+			if err != nil {
+				require.Equal(t, tc.output, err.Error())
+				return
+			}
+
+			require.FileExists(t, tc.dest)
+
+			gotten, err := ioutil.ReadFile(tc.dest)
+			require.Nil(t, err)
+
+			expected, err := ioutil.ReadFile(tc.src)
+			require.Nil(t, err)
+
+			require.Equal(t, expected, gotten)
+
+			// Clean up data after tests
+			cmd = exec.Command("bash", "-c", "rm -rf ./data/remote")
+			_, err = cmd.CombinedOutput()
+			require.Nil(t, err)
 		})
 	}
 }
