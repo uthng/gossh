@@ -38,6 +38,8 @@ const (
 	SCPDIR
 	// SCPGETFILE download a remote file
 	SCPGETFILE
+	// SCPGETDIR download a remote direcotry
+	SCPGETDIR
 )
 
 type scpSession struct {
@@ -153,7 +155,7 @@ func (s *scpSession) GetFile(remoteFile, localFile string) error {
 	if os.IsNotExist(err) {
 		err := os.MkdirAll(localFolder, 0755)
 		if err != nil {
-			return nil
+			return err
 		}
 	} else {
 		if fileInfo.IsDir() {
@@ -163,6 +165,20 @@ func (s *scpSession) GetFile(remoteFile, localFile string) error {
 
 	return s.execSCPSession(SCPGETFILE, remoteFile, func() error {
 		return s.getFile(localFile)
+	})
+}
+
+// GetDir gets remote folder's contents and save them to the local folder.
+// remoteDir must be the path to a the folder to download.
+// localDir must be the path to the local folder in which all subfolders and files
+// in remoteDir will be downloaded and stored recursively.
+// If localDir does not exist, it will be created.
+func (s *scpSession) GetDir(remoteDir, localDir string) error {
+	localDir = filepath.Clean(localDir)
+	remoteDir = filepath.Clean(remoteDir)
+
+	return s.execSCPSession(SCPGETDIR, remoteDir, func() error {
+		return s.getDir(localDir)
 	})
 }
 
@@ -311,12 +327,71 @@ func (s *scpSession) getFile(localFile string) error {
 		msg = string(buffer[1 : n-1])
 		fields = strings.Split(msg, " ")
 
-		return s.readFileData(reader, localFile, os.FileMode(cast.ToUint32(fields[0])))
+		return s.readFileData(reader, localFile, os.FileMode(cast.ToUint32(fields[0])), cast.ToInt(fields[1]))
 	} else if buffer[0] == msgErr || buffer[0] == msgFatalErr {
 		return fmt.Errorf("%s", string(buffer[1:n]))
 	}
 
 	return fmt.Errorf("expected message type '%s', received '%s'", msgCopyFile, msgType)
+}
+
+// getDir gets a remote folder and writes its contents to the given local folder
+func (s *scpSession) getDir(localDir string) error {
+	//var err error
+	var msg string
+	var fields []string
+
+	reader := bufio.NewReader(s.out)
+
+	currentDir := localDir
+
+	for {
+		buffer, n, err := s.readMessage(reader)
+		if err == io.EOF {
+			//fmt.Println("EEEEEEOFFFFFFFFFF")
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		if buffer[0] == msgOK {
+			buffer = buffer[1:]
+			n = len(buffer)
+		} else if buffer[0] == msgErr || buffer[0] == msgFatalErr {
+			return fmt.Errorf("%s", string(buffer[1:n]))
+		}
+
+		//fmt.Printf("real buf %q\n", buffer)
+		//fmt.Println("currentDir", currentDir)
+
+		msgType := string(buffer[0])
+
+		if msgType == msgStartDir {
+			msg = string(buffer[1 : n-1])
+			fields = strings.Split(msg, " ")
+
+			//fmt.Printf("fields %q\n", fields)
+			currentDir = currentDir + "/" + fields[2]
+			//fmt.Println("creating dir", currentDir)
+			err := createLocalDir(currentDir, os.FileMode(cast.ToUint32(fields[0])))
+			if err != nil {
+				return err
+			}
+		} else if msgType == msgCopyFile {
+			msg = string(buffer[1 : n-1])
+			fields = strings.Split(msg, " ")
+
+			//fmt.Printf("fields %q\n", fields)
+			//fmt.Println("creating file", currentDir+"/"+fields[2])
+			err := s.readFileData(reader, currentDir+"/"+fields[2], os.FileMode(cast.ToUint32(fields[0])), cast.ToInt(fields[1]))
+			if err != nil {
+				return err
+			}
+		} else if msgType == msgEndDir {
+			//fmt.Println("msgType", msgType)
+			currentDir = path.Dir(currentDir)
+		}
+	}
 }
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
@@ -350,6 +425,8 @@ func (s *scpSession) execSCPSession(kind int, dest string, fn func() error) erro
 		opt = "-rt"
 	} else if kind == SCPGETFILE {
 		opt = "-f"
+	} else if kind == SCPGETDIR {
+		opt = "-rf"
 	} else {
 		return fmt.Errorf("scp type unknown. Only file or dir is supported")
 	}
@@ -459,55 +536,95 @@ func (s *scpSession) readReply() error {
 }
 
 func (s *scpSession) readMessage(reader *bufio.Reader) ([]byte, int, error) {
-	buffer := make([]byte, 1024)
+	//buffer := make([]byte, 1024)
 
+	//time.Sleep(5 * time.Second)
 	// Send msgOK in order to receive data sent from remote machine
 	_, err := s.in.Write([]byte{msgOK})
 	if err != nil {
-		return buffer, len(buffer), err
+		return nil, 0, err
 	}
 
-	n, err := reader.Read(buffer)
+	buffer, err := reader.ReadBytes('\n')
 
-	//fmt.Println("n", n)
-	//fmt.Printf("buffer %q\n", string(buffer[:n]))
+	//fmt.Println("n", len(buffer))
+	//fmt.Printf("buffer %q\n", string(buffer))
 
-	return buffer, n, err
+	return buffer, len(buffer), err
 }
 
-func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.FileMode) error {
+func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.FileMode, length int) error {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	for {
-		nbRead := 0
-		nbWrite := 0
-		reachEnd := false
+	cpt := 0
 
-		buf, nbRead, err := s.readMessage(reader)
+	_, err = s.in.Write([]byte{msgOK})
+	if err != nil {
+		return err
+	}
+
+	for cpt < length {
+		//nbRead := 0
+		//nbWrite := 0
+		//reachEnd := false
+
+		//buf, nbRead, err := s.readMessage(reader)
+		buf, err := reader.ReadBytes('\n')
 		if err == io.EOF {
 			return f.Sync()
 		}
 
-		if buf[nbRead-1] == msgOK {
-			reachEnd = true
-			nbRead = nbRead - 1
-		}
+		//if buf[nbRead-1] == msgOK {
+		//reachEnd = true
+		//nbRead = nbRead - 1
+		//}
 
-		nbWrite, err = f.Write(buf[:nbRead])
+		nbRead := len(buf)
+
+		nbWrite, err := f.Write(buf)
 		if err != nil {
 			return err
 		}
 
 		if nbWrite != nbRead {
-			return fmt.Errorf("Bytes (%d) written to the file is not the same as bytes read (%d)", nbWrite, nbRead)
+			return fmt.Errorf("bytes (%d) written to the file is not the same as bytes read (%d)", nbWrite, nbRead)
 		}
 
-		if reachEnd {
-			return f.Sync()
-		}
+		//if reachEnd {
+		//return f.Sync()
+		//}
+
+		cpt = cpt + nbWrite
 	}
+
+	//fmt.Println("buffered", reader.Buffered())
+	//b1, err := reader.ReadByte()
+	//fmt.Printf("b %q %s\n", b1, err)
+
+	//b1, err = reader.ReadByte()
+	//fmt.Printf("b %q %s\n", b1, err)
+	return f.Sync()
+}
+
+//////// INTERNAL FUNCTIONS //////////
+
+func createLocalDir(dir string, mode os.FileMode) error {
+	// Check whether dir exists.
+	// If not, we create it with all parent directories.
+	// If yes, we check if dir is a directory or not.
+	// If yes, dir remains as it is. Otherwise an error will be returned.
+	fileInfo, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(dir, mode)
+	}
+
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("%s already exists but not a directory", dir)
+	}
+
+	return nil
 }
