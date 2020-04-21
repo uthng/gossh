@@ -295,6 +295,7 @@ func TestSCPDir(t *testing.T) {
 				"/tmp/scp/id_rsa",
 				"/tmp/scp/id_rsa-cert.pub",
 				"/tmp/scp/id_rsa.pub",
+				"/tmp/scp/lorem.txt",
 				"/tmp/scp/scp_single_file",
 			},
 		},
@@ -412,6 +413,74 @@ func TestSCPGetFile(t *testing.T) {
 
 			// Clean up data after tests
 			cmd = exec.Command("bash", "-c", "rm -rf ./data/remote")
+			_, err = cmd.CombinedOutput()
+			require.Nil(t, err)
+		})
+	}
+}
+
+func TestSCPGetDir(t *testing.T) {
+	testCases := []struct {
+		name   string
+		src    string
+		dest   string
+		output interface{}
+	}{
+		//{
+		//"ErrFileNotfound",
+		//"/tmp/lorem.txt",
+		//"./data/remote",
+		//"scp: /tmp/lorem.txt: No such file or directory\n",
+		//},
+		{
+			"OKDir",
+			"/tmp/data",
+			"/tmp/remote",
+			nil,
+		},
+	}
+
+	s := &ssh.Server{
+		Addr:    ":2222",
+		Handler: sessionHandler,
+		PasswordHandler: func(ctx ssh.Context, password string) bool {
+			return ctx.User() == "user" && password == "pass"
+		},
+	}
+	go s.ListenAndServe()
+
+	defer s.Close()
+
+	time.Sleep(3 * time.Second)
+
+	config, err := NewClientConfigWithUserPass("user", "pass", "localhost", 2222, false)
+	require.Nil(t, err)
+
+	client, err := NewClient(config)
+	require.Nil(t, err)
+
+	require.NotNil(t, client)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Clean up data before executing tests
+			cmd := exec.Command("bash", "-c", "rm -rf "+tc.dest+";rm -rf ./tmp/remote; cp -r ./data /tmp/")
+			_, err := cmd.CombinedOutput()
+			require.Nil(t, err)
+
+			err = client.SCPGetDir(tc.src, tc.dest)
+			if err != nil {
+				require.Equal(t, tc.output, err.Error())
+				return
+			}
+
+			cmd = exec.Command("bash", "-c", "diff -r "+tc.src+" "+tc.dest+"/"+path.Base(tc.src))
+			output, err := cmd.CombinedOutput()
+			require.Nil(t, err)
+			require.Empty(t, output)
+
+			// Clean up data after tests
+			cmd = exec.Command("bash", "-c", "rm -rf "+tc.dest)
 			_, err = cmd.CombinedOutput()
 			require.Nil(t, err)
 		})

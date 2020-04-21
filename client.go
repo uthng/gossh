@@ -101,7 +101,7 @@ func (c *Client) SCPDir(srcDir, destDir, mode string) error {
 }
 
 // SCPGetFile gets srcFile from remote machine and save in destDir.
-// srcFile can be a regular file.
+// srcFile must be a regular file.
 // destFile is the local regular in which srcFile's content will be stored;.
 // If destFile does not exists, it will be created.
 func (c *Client) SCPGetFile(srcFile, destFile string) error {
@@ -117,6 +117,25 @@ func (c *Client) SCPGetFile(srcFile, destFile string) error {
 	}
 
 	return scpSession.GetFile(srcFile, destFile)
+}
+
+// SCPGetDir gets srcDir from remote machine and save in destDir.
+// srcDir must be a folder. destDir is the local folder in which
+// all files or subfolders inside srcDir will be stored.
+// If destDir does not exists, it will be created.
+func (c *Client) SCPGetDir(srcDir, destDir string) error {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil
+	}
+	defer session.Close()
+
+	scpSession, err := newSCPSession(session)
+	if err != nil {
+		return err
+	}
+
+	return scpSession.GetDir(srcDir, destDir)
 }
 
 /////////////// INTERNAL FUNCTIONS //////////////////////////
