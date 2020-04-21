@@ -42,6 +42,10 @@ const (
 	SCPGETDIR
 )
 
+const (
+	bufferSizeDataFile = 1024 * 1024
+)
+
 type scpSession struct {
 	session *ssh.Session
 	in      io.WriteCloser
@@ -536,9 +540,6 @@ func (s *scpSession) readReply() error {
 }
 
 func (s *scpSession) readMessage(reader *bufio.Reader) ([]byte, int, error) {
-	//buffer := make([]byte, 1024)
-
-	//time.Sleep(5 * time.Second)
 	// Send msgOK in order to receive data sent from remote machine
 	_, err := s.in.Write([]byte{msgOK})
 	if err != nil {
@@ -567,25 +568,43 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 		return err
 	}
 
-	for cpt < length {
-		//nbRead := 0
-		//nbWrite := 0
-		//reachEnd := false
+	//fmt.Println("length", length)
+	buf := make([]byte, bufferSizeDataFile)
 
-		//buf, nbRead, err := s.readMessage(reader)
-		buf, err := reader.ReadBytes('\n')
+	for {
+		reachEnd := false
+
+		n, err := reader.Read(buf)
 		if err == io.EOF {
+			//fmt.Println("EOFFFFFFFFFFF")
 			return f.Sync()
 		}
 
-		//if buf[nbRead-1] == msgOK {
-		//reachEnd = true
-		//nbRead = nbRead - 1
-		//}
+		nbRead := n
 
-		nbRead := len(buf)
+		cpt = cpt + n
+		if cpt >= length {
+			reachEnd = true
+			// For some unknown reasons, when we have buffer's size greater
+			// than the data length, in some cases, the byte msgOK '\x00'
+			// is not tramsitted in the same message data, but in the next one:
+			// protocol message. We need to be sure that, in this case, we dont
+			// remove the last byte which is '\n' instead of '\x00'.
+			// For ex:
+			// length 6
+			// raw data "test1\n", 6
+			// ##########################################
+			// raw data length 6, nbRead 5
+			// n 15
+			// buffer "\x00C0644 6 test2\n"
+			if buf[n-1] == msgOK {
+				nbRead = nbRead - 1
+			}
 
-		nbWrite, err := f.Write(buf)
+			//fmt.Printf("raw data length %d, nbRead %d, cpt %d\n", n, nbRead, cpt)
+		}
+
+		nbWrite, err := f.Write(buf[:nbRead])
 		if err != nil {
 			return err
 		}
@@ -594,20 +613,10 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 			return fmt.Errorf("bytes (%d) written to the file is not the same as bytes read (%d)", nbWrite, nbRead)
 		}
 
-		//if reachEnd {
-		//return f.Sync()
-		//}
-
-		cpt = cpt + nbWrite
+		if reachEnd {
+			return f.Sync()
+		}
 	}
-
-	//fmt.Println("buffered", reader.Buffered())
-	//b1, err := reader.ReadByte()
-	//fmt.Printf("b %q %s\n", b1, err)
-
-	//b1, err = reader.ReadByte()
-	//fmt.Printf("b %q %s\n", b1, err)
-	return f.Sync()
 }
 
 //////// INTERNAL FUNCTIONS //////////

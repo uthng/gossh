@@ -464,7 +464,7 @@ func TestSCPGetDir(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Clean up data before executing tests
-			cmd := exec.Command("bash", "-c", "rm -rf "+tc.dest+";rm -rf ./tmp/remote; cp -r ./data /tmp/")
+			cmd := exec.Command("bash", "-c", "rm -rf "+tc.dest+"; rm -rf "+tc.src+"; cp -r ./data /tmp/")
 			_, err := cmd.CombinedOutput()
 			require.Nil(t, err)
 
@@ -479,7 +479,12 @@ func TestSCPGetDir(t *testing.T) {
 			require.Nil(t, err)
 			require.Empty(t, output)
 
-			// Clean up data after tests
+			//Execution of gobin to test if the transfer is correct
+			cmd = exec.Command("bash", "-c", tc.dest+"/"+path.Base(tc.src)+"/bin/mac/gobin -h")
+			_, err = cmd.CombinedOutput()
+			require.Nil(t, err)
+
+			//Clean up data after tests
 			cmd = exec.Command("bash", "-c", "rm -rf "+tc.dest)
 			_, err = cmd.CombinedOutput()
 			require.Nil(t, err)
