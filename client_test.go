@@ -482,8 +482,8 @@ func TestSCPGetDir(t *testing.T) {
 
 			cmd = exec.Command("bash", "-c", "diff -r "+tc.src+" "+tc.dest+"/"+path.Base(tc.src))
 			output, err := cmd.CombinedOutput()
-			require.Nil(t, err)
 			require.Empty(t, string(output))
+			require.Nil(t, err)
 
 			//Execution of gobin to test if the transfer is correct
 			cmd = exec.Command("bash", "-c", tc.dest+"/"+path.Base(tc.src)+"/bin/"+runtime.GOOS+"/gobin -h")
