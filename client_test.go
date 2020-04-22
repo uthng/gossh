@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -159,7 +160,7 @@ func TestExecCommandWithSignedPubKey(t *testing.T) {
 	require.Equal(t, string(res), cmd)
 }
 
-func TestSCPBytes(t *testing.T) {
+func TestSCPSendBytes(t *testing.T) {
 	var content = []byte(`SCP single file transfer test`)
 
 	testCases := []struct {
@@ -285,8 +286,10 @@ func TestSCPSendDir(t *testing.T) {
 			[]string{
 				"/tmp/scp",
 				"/tmp/scp/bin",
-				"/tmp/scp/bin/mac",
-				"/tmp/scp/bin/mac/gobin",
+				"/tmp/scp/bin/darwin",
+				"/tmp/scp/bin/darwin/gobin",
+				"/tmp/scp/bin/linux",
+				"/tmp/scp/bin/linux/gobin",
 				"/tmp/scp/ca",
 				"/tmp/scp/ca.pub",
 				"/tmp/scp/folder1",
@@ -483,9 +486,8 @@ func TestSCPGetDir(t *testing.T) {
 			require.Empty(t, string(output))
 
 			//Execution of gobin to test if the transfer is correct
-			cmd = exec.Command("bash", "-c", tc.dest+"/"+path.Base(tc.src)+"/bin/mac/gobin -h")
+			cmd = exec.Command("bash", "-c", tc.dest+"/"+path.Base(tc.src)+"/bin/"+runtime.GOOS+"/gobin -h")
 			output, err = cmd.CombinedOutput()
-			require.Empty(t, string(output))
 			require.Nil(t, err)
 
 			//Clean up data after tests
