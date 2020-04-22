@@ -36,8 +36,14 @@ func NewClient(config *Config) (*Client, error) {
 	return c, nil
 }
 
+// SetVerbosity sets log level
 func (c *Client) SetVerbosity(level int) {
 	c.logger.SetVerbosity(level)
+}
+
+// DisableColor disables log colors
+func (c *Client) DisableLogColor(level int) {
+	c.logger.DisableColor()
 }
 
 // ExecCommand executes a shell command on remote machine
@@ -63,7 +69,7 @@ func (c *Client) ExecCommand(cmd string) ([]byte, error) {
 // SCPBytes sends content in bytes to remote machine and save it
 // in a file with the given path
 func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
-	c.checkLogVerbosity()
+	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -81,7 +87,7 @@ func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
 
 // SCPFile sends a file to remote machine
 func (c *Client) SCPFile(srcFile, destFile, mode string) error {
-	c.checkLogVerbosity()
+	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -101,7 +107,7 @@ func (c *Client) SCPFile(srcFile, destFile, mode string) error {
 // Mode is only applied for the 1st directory. All files/folders
 // inside the srcDir will preserve the same mode on remote machine
 func (c *Client) SCPDir(srcDir, destDir, mode string) error {
-	c.checkLogVerbosity()
+	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -122,7 +128,7 @@ func (c *Client) SCPDir(srcDir, destDir, mode string) error {
 // destFile is the local regular in which srcFile's content will be stored;.
 // If destFile does not exists, it will be created.
 func (c *Client) SCPGetFile(srcFile, destFile string) error {
-	c.checkLogVerbosity()
+	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -143,7 +149,7 @@ func (c *Client) SCPGetFile(srcFile, destFile string) error {
 // all files or subfolders inside srcDir will be stored.
 // If destDir does not exists, it will be created.
 func (c *Client) SCPGetDir(srcDir, destDir string) error {
-	c.checkLogVerbosity()
+	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -161,9 +167,14 @@ func (c *Client) SCPGetDir(srcDir, destDir string) error {
 
 /////////////// INTERNAL FUNCTIONS //////////////////////////
 
-func (c *Client) checkLogVerbosity() {
+func (c *Client) checkLogEnvVars() {
 	verbosity := os.Getenv("GOSSH_VERBOSITY")
 	if s, err := strconv.Atoi(verbosity); err == nil {
 		c.logger.SetVerbosity(s)
+	}
+
+	disabled := os.Getenv("GOSSH_DISABLE_COLOR")
+	if disabled != "" {
+		c.logger.DisableColor()
 	}
 }
