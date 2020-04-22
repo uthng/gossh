@@ -494,9 +494,9 @@ func TestSCPGetDir(t *testing.T) {
 			//require.Nil(t, err)
 
 			//Clean up data after tests
-			cmd = exec.Command("bash", "-c", "rm -rf "+tc.dest)
-			_, err = cmd.CombinedOutput()
-			require.Nil(t, err)
+			//cmd = exec.Command("bash", "-c", "rm -rf "+tc.dest)
+			//_, err = cmd.CombinedOutput()
+			//require.Nil(t, err)
 		})
 	}
 }
