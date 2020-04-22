@@ -38,7 +38,7 @@ func sessionHandler(s ssh.Session) {
 	}
 
 	if err := cmd.Start(); err != nil {
-		//fmt.Println("err", err.Error())
+		s.Exit(1)
 		fmt.Fprintln(s, "\x01failed to start command")
 		return
 	}
@@ -364,7 +364,7 @@ func TestSCPGetFile(t *testing.T) {
 			"scp: /tmp/lorem.txt: No such file or directory\n",
 		},
 		{
-			"ErrFileOKInFoler",
+			"OKFileInFoler",
 			"/tmp/data/lorem.txt",
 			"./data/remote/lorem.txt",
 			nil,
