@@ -575,13 +575,16 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 
 		n, _ := reader.Read(buf)
 
-		s.myClient.logger.Debugw("Data file read", "buf", string(buf[:n]), "len", n)
+		//s.myClient.logger.Debugw("Data file read", "buf", string(buf[:n]), "len", n)
 
 		nbRead := n
 
 		cpt = cpt + n
 		if cpt >= length {
 			reachEnd = true
+
+			s.myClient.logger.Debugw("End data file (before last byte check)", "buf", string(buf[:nbRead]), "nbRead", nbRead, "cpt", cpt)
+
 			// For some unknown reasons, when we have buffer's size greater
 			// than the data length, in some cases, the byte msgOK '\x00'
 			// is not tramsitted in the same message data, but in the next one:
@@ -594,11 +597,15 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 			// raw data length 6, nbRead 5
 			// n 15
 			// buffer "\x00C0644 6 test2\n"
-			if buf[n-1] == msgOK {
+
+			// In the case where '\x00' is transmitted in the same data message, for example:
+			// INFO:  C message                                           fields=["0644" "1679" "id_rsa"] file="/tmp/remote/data/id_rsa"
+			// DEBUG: End data file                                       buf="XSzUgjr0T63gy5YtHDUrf43bMCKTAvLi05yxwu6VV\nP2WdpQKBgQCOuv5dNIk2XF/RWTQnxYqVAOhMQ6gRgbp8aHEZfnfUmBrhRyZ+kWP0\nxs8+67AmUOMazYmxwygBac7w64m212aDKm0hAO7micqAuKEkFjfph9D6ajYWfQOX\nkH4zgj76wYBOjiQfYtXhouUjsZtpN3Ipz6fLTOeA8NMur+FPg7pzGQ==\n-----END RSA PRIVATE KEY-----\n" nbRead=259 cpt=1680
+			// We have the cpt is greater than length of 1 which is '\x00' transmitted. Only in this case, we remove the last byte. Indeed, for linux binary, \x00 can be a byte of binary.
+			if cpt == length+1 && buf[n-1] == msgOK {
 				nbRead = nbRead - 1
 			}
 
-			//fmt.Printf("raw data length %d, nbRead %d, cpt %d\n", n, nbRead, cpt)
 			s.myClient.logger.Debugw("End data file", "buf", string(buf[:nbRead]), "nbRead", nbRead, "cpt", cpt)
 		}
 
