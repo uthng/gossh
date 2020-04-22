@@ -4,7 +4,10 @@ import (
 	"bytes"
 	//"fmt"
 	//"io/ioutil"
+	"os"
 	"strconv"
+
+	log "github.com/uthng/golog"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -12,6 +15,7 @@ import (
 // Client encapsulates ssh client
 type Client struct {
 	client *ssh.Client
+	logger *log.Logger
 }
 
 // NewClient initializes a ssh client following
@@ -26,7 +30,14 @@ func NewClient(config *Config) (*Client, error) {
 
 	c.client = client
 
+	c.logger = log.NewLogger()
+	c.logger.SetVerbosity(log.NONE)
+
 	return c, nil
+}
+
+func (c *Client) SetVerbosity(level int) {
+	c.logger.SetVerbosity(level)
 }
 
 // ExecCommand executes a shell command on remote machine
@@ -52,13 +63,15 @@ func (c *Client) ExecCommand(cmd string) ([]byte, error) {
 // SCPBytes sends content in bytes to remote machine and save it
 // in a file with the given path
 func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
+	c.checkLogVerbosity()
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
 	}
 	defer session.Close()
 
-	scpSession, err := newSCPSession(session)
+	scpSession, err := newSCPSession(c, session)
 	if err != nil {
 		return err
 	}
@@ -68,13 +81,15 @@ func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
 
 // SCPFile sends a file to remote machine
 func (c *Client) SCPFile(srcFile, destFile, mode string) error {
+	c.checkLogVerbosity()
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
 	}
 	defer session.Close()
 
-	scpSession, err := newSCPSession(session)
+	scpSession, err := newSCPSession(c, session)
 	if err != nil {
 		return err
 	}
@@ -86,13 +101,15 @@ func (c *Client) SCPFile(srcFile, destFile, mode string) error {
 // Mode is only applied for the 1st directory. All files/folders
 // inside the srcDir will preserve the same mode on remote machine
 func (c *Client) SCPDir(srcDir, destDir, mode string) error {
+	c.checkLogVerbosity()
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
 	}
 	defer session.Close()
 
-	scpSession, err := newSCPSession(session)
+	scpSession, err := newSCPSession(c, session)
 	if err != nil {
 		return err
 	}
@@ -105,13 +122,15 @@ func (c *Client) SCPDir(srcDir, destDir, mode string) error {
 // destFile is the local regular in which srcFile's content will be stored;.
 // If destFile does not exists, it will be created.
 func (c *Client) SCPGetFile(srcFile, destFile string) error {
+	c.checkLogVerbosity()
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
 	}
 	defer session.Close()
 
-	scpSession, err := newSCPSession(session)
+	scpSession, err := newSCPSession(c, session)
 	if err != nil {
 		return err
 	}
@@ -124,13 +143,15 @@ func (c *Client) SCPGetFile(srcFile, destFile string) error {
 // all files or subfolders inside srcDir will be stored.
 // If destDir does not exists, it will be created.
 func (c *Client) SCPGetDir(srcDir, destDir string) error {
+	c.checkLogVerbosity()
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil
 	}
 	defer session.Close()
 
-	scpSession, err := newSCPSession(session)
+	scpSession, err := newSCPSession(c, session)
 	if err != nil {
 		return err
 	}
@@ -139,3 +160,10 @@ func (c *Client) SCPGetDir(srcDir, destDir string) error {
 }
 
 /////////////// INTERNAL FUNCTIONS //////////////////////////
+
+func (c *Client) checkLogVerbosity() {
+	verbosity := os.Getenv("GOSSH_VERBOSITY")
+	if s, err := strconv.Atoi(verbosity); err == nil {
+		c.logger.SetVerbosity(s)
+	}
+}
