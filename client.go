@@ -1,9 +1,7 @@
 package gossh
 
 import (
-	"bytes"
 	//"fmt"
-	//"io/ioutil"
 	"os"
 	"strconv"
 
@@ -41,29 +39,20 @@ func (c *Client) SetVerbosity(level int) {
 	c.logger.SetVerbosity(level)
 }
 
-// DisableColor disables log colors
+// DisableLogColor disables log colors
 func (c *Client) DisableLogColor(level int) {
 	c.logger.DisableColor()
 }
 
 // ExecCommand executes a shell command on remote machine
 func (c *Client) ExecCommand(cmd string) ([]byte, error) {
-	var buf bytes.Buffer
-
 	session, err := c.client.NewSession()
 	if err != nil {
 		return nil, err
 	}
 	defer session.Close()
 
-	session.Stdout = &buf
-
-	err = session.Run(cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return session.CombinedOutput(cmd)
 }
 
 // SCPBytes sends content in bytes to remote machine and save it
