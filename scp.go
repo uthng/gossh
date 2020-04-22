@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	bufferSizeDataFile = 1024 * 1024
+	bufferSizeDataFile = 1024
 )
 
 type scpSession struct {
@@ -52,9 +52,11 @@ type scpSession struct {
 	out     io.Reader
 	err     io.Reader
 	timeout time.Duration
+
+	myClient *Client
 }
 
-func newSCPSession(session *ssh.Session) (*scpSession, error) {
+func newSCPSession(client *Client, session *ssh.Session) (*scpSession, error) {
 	in, err := session.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -71,11 +73,12 @@ func newSCPSession(session *ssh.Session) (*scpSession, error) {
 	}
 
 	s := &scpSession{
-		session: session,
-		in:      in,
-		out:     out,
-		err:     e,
-		timeout: time.Minute * 15,
+		session:  session,
+		in:       in,
+		out:      out,
+		err:      e,
+		timeout:  time.Minute * 15,
+		myClient: client,
 	}
 
 	return s, nil
@@ -208,11 +211,6 @@ func (s *scpSession) sendFile(mode string, length int64, remoteFile string, cont
 	if err != nil {
 		return fmt.Errorf("error while writing content file: err=%s", err)
 	}
-
-	//err = s.readReply()
-	//if err != nil {
-	//return err
-	//}
 
 	_, err = s.in.Write([]byte{msgOK})
 	if err != nil {
@@ -365,9 +363,6 @@ func (s *scpSession) getDir(localDir string) error {
 			return fmt.Errorf("%s", string(buffer[1:n]))
 		}
 
-		//fmt.Printf("real buf %q\n", buffer)
-		//fmt.Println("currentDir", currentDir)
-
 		msgType := string(buffer[0])
 
 		if msgType == msgStartDir {
@@ -376,6 +371,7 @@ func (s *scpSession) getDir(localDir string) error {
 
 			//fmt.Printf("fields %q\n", fields)
 			currentDir = currentDir + "/" + fields[2]
+			s.myClient.logger.Infow("D message", "fields", fields, "dir", currentDir)
 			//fmt.Println("creating dir", currentDir)
 			err := createLocalDir(currentDir, os.FileMode(cast.ToUint32(fields[0])))
 			if err != nil {
@@ -387,12 +383,14 @@ func (s *scpSession) getDir(localDir string) error {
 
 			//fmt.Printf("fields %q\n", fields)
 			//fmt.Println("creating file", currentDir+"/"+fields[2])
-			err := s.readFileData(reader, currentDir+"/"+fields[2], os.FileMode(cast.ToUint32(fields[0])), cast.ToInt(fields[1]))
+			newFile := currentDir + "/" + fields[2]
+			s.myClient.logger.Infow("C message", "fields", fields, "file", newFile)
+			err := s.readFileData(reader, newFile, os.FileMode(cast.ToUint32(fields[0])), cast.ToInt(fields[1]))
 			if err != nil {
 				return err
 			}
 		} else if msgType == msgEndDir {
-			//fmt.Println("msgType", msgType)
+			s.myClient.logger.Infow("E message", "olddir", currentDir, "newdir", path.Dir(currentDir))
 			currentDir = path.Dir(currentDir)
 		}
 	}
@@ -548,6 +546,7 @@ func (s *scpSession) readMessage(reader *bufio.Reader) ([]byte, int, error) {
 
 	buffer, err := reader.ReadBytes('\n')
 
+	s.myClient.logger.Infow("Procol message", "buffer", string(buffer), "len", len(buffer))
 	//fmt.Println("n", len(buffer))
 	//fmt.Printf("buffer %q\n", string(buffer))
 
@@ -574,11 +573,9 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 	for {
 		reachEnd := false
 
-		n, err := reader.Read(buf)
-		if err == io.EOF {
-			//fmt.Println("EOFFFFFFFFFFF")
-			return f.Sync()
-		}
+		n, _ := reader.Read(buf)
+
+		s.myClient.logger.Debugw("Data file read", "buf", string(buf[:n]), "len", n)
 
 		nbRead := n
 
@@ -602,6 +599,7 @@ func (s *scpSession) readFileData(reader *bufio.Reader, file string, mode os.Fil
 			}
 
 			//fmt.Printf("raw data length %d, nbRead %d, cpt %d\n", n, nbRead, cpt)
+			s.myClient.logger.Debugw("End data file", "buf", string(buf[:nbRead]), "nbRead", nbRead, "cpt", cpt)
 		}
 
 		nbWrite, err := f.Write(buf[:nbRead])
