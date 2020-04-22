@@ -217,7 +217,7 @@ func TestSCPBytes(t *testing.T) {
 	}
 }
 
-func TestSCPFile(t *testing.T) {
+func TestSCPSendFile(t *testing.T) {
 	testCases := []struct {
 		name   string
 		dest   string
@@ -273,7 +273,7 @@ func TestSCPFile(t *testing.T) {
 	}
 }
 
-func TestSCPDir(t *testing.T) {
+func TestSCPSendDir(t *testing.T) {
 	testCases := []struct {
 		name   string
 		dest   string
@@ -480,12 +480,12 @@ func TestSCPGetDir(t *testing.T) {
 			cmd = exec.Command("bash", "-c", "diff -r "+tc.src+" "+tc.dest+"/"+path.Base(tc.src))
 			output, err := cmd.CombinedOutput()
 			require.Nil(t, err)
-			require.Empty(t, output)
+			require.Empty(t, string(output))
 
 			//Execution of gobin to test if the transfer is correct
 			cmd = exec.Command("bash", "-c", tc.dest+"/"+path.Base(tc.src)+"/bin/mac/gobin -h")
 			output, err = cmd.CombinedOutput()
-			require.Empty(t, output)
+			require.Empty(t, string(output))
 			require.Nil(t, err)
 
 			//Clean up data after tests
