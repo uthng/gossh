@@ -284,6 +284,9 @@ func TestSCPDir(t *testing.T) {
 			"/tmp/scp",
 			[]string{
 				"/tmp/scp",
+				"/tmp/scp/bin",
+				"/tmp/scp/bin/mac",
+				"/tmp/scp/bin/mac/gobin",
 				"/tmp/scp/ca",
 				"/tmp/scp/ca.pub",
 				"/tmp/scp/folder1",
