@@ -57,7 +57,7 @@ func (c *Client) ExecCommand(cmd string) ([]byte, error) {
 
 // SCPBytes sends content in bytes to remote machine and save it
 // in a file with the given path
-func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
+func (c *Client) SCPSendBytes(content []byte, destFile, mode string) error {
 	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
@@ -75,7 +75,7 @@ func (c *Client) SCPBytes(content []byte, destFile, mode string) error {
 }
 
 // SCPFile sends a file to remote machine
-func (c *Client) SCPFile(srcFile, destFile, mode string) error {
+func (c *Client) SCPSendFile(srcFile, destFile, mode string) error {
 	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()
@@ -95,7 +95,7 @@ func (c *Client) SCPFile(srcFile, destFile, mode string) error {
 // SCPDir sends recursively a directory to remote machine.
 // Mode is only applied for the 1st directory. All files/folders
 // inside the srcDir will preserve the same mode on remote machine
-func (c *Client) SCPDir(srcDir, destDir, mode string) error {
+func (c *Client) SCPSendDir(srcDir, destDir, mode string) error {
 	c.checkLogEnvVars()
 
 	session, err := c.client.NewSession()

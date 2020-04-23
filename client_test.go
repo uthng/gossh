@@ -204,7 +204,7 @@ func TestSCPSendBytes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client.ExecCommand("rm -rf " + path.Dir(tc.dest))
 
-			err = client.SCPBytes(content, tc.dest, "0777")
+			err = client.SCPSendBytes(content, tc.dest, "0777")
 			if err != nil {
 				require.Equal(t, tc.output, err.Error())
 				return
@@ -260,7 +260,7 @@ func TestSCPSendFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client.ExecCommand("rm -rf " + path.Dir(tc.dest))
 
-			err = client.SCPFile("./data/scp_single_file", tc.dest, "0777")
+			err = client.SCPSendFile("./data/scp_single_file", tc.dest, "0777")
 			if err != nil {
 				require.Equal(t, tc.output, err.Error())
 				return
@@ -331,7 +331,7 @@ func TestSCPSendDir(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client.ExecCommand("rm -rf " + tc.dest)
 
-			err = client.SCPDir("./data", tc.dest, "0777")
+			err = client.SCPSendDir("./data", tc.dest, "0777")
 			if err != nil {
 				require.Equal(t, tc.output, err.Error())
 				return
